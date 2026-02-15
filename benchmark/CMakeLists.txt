@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(hotpotqa_bench)
+project(hnsw_bench)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,11 +11,15 @@ set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type")
 
 include_directories(${CMAKE_SOURCE_DIR}/..)
 
-add_executable(bench_hotpotqa bench_hotpotqa.cpp)
-
 find_package(OpenMP REQUIRED)
+
+add_executable(bench_hotpotqa bench_hotpotqa.cpp)
 target_link_libraries(bench_hotpotqa OpenMP::OpenMP_CXX)
 
+add_executable(bench_sift1m bench_sift1m.cpp)
+target_link_libraries(bench_sift1m OpenMP::OpenMP_CXX)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_link_libraries(bench_hotpotqaasan)
+    target_link_libraries(bench_hotpotqa asan)
+    target_link_libraries(bench_sift1m asan)
 endif()

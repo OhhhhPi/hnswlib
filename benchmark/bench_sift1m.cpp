@@ -1,8 +1,9 @@
 /**
- * @file bench_hotpotqa.cpp
- * @brief Main benchmark program for HotpotQA RAG evaluation using hnswlib.
+ * @file bench_sift1m.cpp
+ * @brief Benchmark program for SIFT1M dataset using hnswlib.
  *
  * Measures index construction, search latency, throughput, and recall.
+ * SIFT1M: 1M base vectors, 10K queries, 128 dimensions, L2 distance.
  */
 
 #include <algorithm>
@@ -43,7 +44,7 @@ struct Config {
   bool load_index;
   int seed;
   int warmup_queries;
-  bool defer_qps; // If true, run all latency tests first, then all QPS tests
+  bool defer_qps;
 };
 
 std::vector<int> parse_int_list(const std::string &s) {
@@ -60,7 +61,7 @@ Config parse_args(int argc, char **argv) {
   Config cfg;
   cfg.M = 16;
   cfg.ef_construction = 200;
-  cfg.metric = "ip";
+  cfg.metric = "l2";
   cfg.num_threads = 16;
   cfg.save_index = false;
   cfg.load_index = false;
@@ -128,8 +129,8 @@ void write_json_result(
   }
 
   out << "{\n";
-  out << "  \"dataset\": \"HotpotQA-Train\",\n";
-  out << "  \"embedding_model\": \"bge-large-en-v1.5\",\n";
+  out << "  \"dataset\": \"SIFT1M\",\n";
+  out << "  \"embedding_model\": \"SIFT-128\",\n";
   out << "  \"dim\": " << dim << ",\n";
   out << "  \"num_base\": " << num_base << ",\n";
   out << "  \"num_query\": " << num_query << ",\n";
@@ -172,7 +173,7 @@ void write_json_result(
 }
 
 int main(int argc, char **argv) {
-  std::cout << "=== HotpotQA HNSW Benchmark ===" << std::endl;
+  std::cout << "=== SIFT1M HNSW Benchmark ===" << std::endl;
 
   Config cfg = parse_args(argc, argv);
 
@@ -197,7 +198,6 @@ int main(int argc, char **argv) {
   mem_tracker.snapshot("start");
 
   std::cout << "\n=== Loading Data ===" << std::endl;
-
   int num_base, dim;
   float *base_data = bench::read_fvecs_flat(cfg.base_path, num_base, dim);
   mem_tracker.snapshot("after_load_base");
@@ -242,20 +242,23 @@ int main(int argc, char **argv) {
   size_t index_memory_kb = 0;
 
   if (cfg.load_index && !cfg.index_path.empty()) {
-    std::cout << "\n=== Loading Index from " << cfg.index_path << " ===" << std::endl;
+    std::cout << "\n=== Loading Index from " << cfg.index_path
+              << " ===" << std::endl;
     bench::Timer load_timer;
     index = new hnswlib::HierarchicalNSW<float>(space, cfg.index_path);
     double load_sec = load_timer.elapsed_sec();
     std::cout << "Index loaded in " << load_sec << " sec" << std::endl;
     std::cout << "Index max_elements: " << index->max_elements_ << std::endl;
-    std::cout << "Index cur_element_count: " << index->cur_element_count << std::endl;
+    std::cout << "Index cur_element_count: " << index->cur_element_count
+              << std::endl;
     mem_tracker.snapshot("after_build");
     index_memory_kb = mem_tracker.delta_rss_kb("after_load_gt", "after_build");
-    std::cout << "Index memory: " << (index_memory_kb / 1024.0) << " MB" << std::endl;
+    std::cout << "Index memory: " << (index_memory_kb / 1024.0) << " MB"
+              << std::endl;
   } else {
     std::cout << "\n=== Building Index ===" << std::endl;
-    index = new hnswlib::HierarchicalNSW<float>(
-        space, num_base, cfg.M, cfg.ef_construction, cfg.seed);
+    index = new hnswlib::HierarchicalNSW<float>(space, num_base, cfg.M,
+                                                cfg.ef_construction, cfg.seed);
 
     bench::Timer build_timer;
 
@@ -296,8 +299,8 @@ int main(int argc, char **argv) {
   }
   std::cout << "  Warmup queries: " << cfg.warmup_queries << std::endl;
 
-  // --- Helper lambda: measure latency for one (ef_search, K) combo ---
-  auto measure_latency = [&](int ef_search, int K) -> std::map<std::string, std::string> {
+  auto measure_latency = [&](int ef_search,
+                             int K) -> std::map<std::string, std::string> {
     index->setEf(ef_search);
 
     int warmup = std::min(cfg.warmup_queries, num_query);
@@ -359,7 +362,6 @@ int main(int argc, char **argv) {
     return result_entry;
   };
 
-  // --- Helper lambda: measure multi-thread QPS for one (ef_search, K) ---
   auto measure_qps = [&](int ef_search, int K,
                          std::map<std::string, std::string> &entry) {
     index->setEf(ef_search);
@@ -383,8 +385,6 @@ int main(int argc, char **argv) {
   };
 
   if (cfg.defer_qps) {
-    // ===== DEFERRED QPS MODE =====
-    // Phase 1: All latency measurements (single-threaded, no cache pollution)
     std::cout << "\n--- Phase 1: Latency Measurements (no multi-thread) ---"
               << std::endl;
     for (int ef_search : cfg.ef_search_values) {
@@ -396,7 +396,6 @@ int main(int argc, char **argv) {
       }
     }
 
-    // Phase 2: All QPS measurements (multi-threaded)
     std::cout << "\n--- Phase 2: QPS Measurements (multi-thread) ---"
               << std::endl;
     size_t idx = 0;
@@ -412,7 +411,6 @@ int main(int argc, char **argv) {
       }
     }
   } else {
-    // ===== ORIGINAL INTERLEAVED MODE =====
     for (int ef_search : cfg.ef_search_values) {
       for (int K : cfg.K_values) {
         if (K > gt_k)

@@ -1,4 +1,17 @@
-# HNSW Benchmark for HotpotQA
+# HNSW Benchmark
+
+使用 hnswlib 评估向量检索性能，支持多个标准数据集。
+
+## 支持的数据集
+
+| 数据集 | 维度 | 基向量数 | 查询数 | 距离度量 | 说明 |
+|--------|------|----------|--------|----------|------|
+| **HotpotQA** | 1024 | 可变 | 可变 | IP | RAG场景，BGE-large-en-v1.5嵌入 |
+| **SIFT1M** | 128 | 1,000,000 | 10,000 | L2 | 标准ANN benchmark |
+
+---
+
+# HotpotQA Benchmark
 
 使用 HotpotQA 数据集和 BGE-large-en-v1.5 向量模型评估 hnswlib 检索性能。
 
@@ -221,7 +234,7 @@ ef_search=200
 | `--num_threads` | 最大线程数 | 1 |
 | `--warmup` | 预热查询数 | 1000 |
 | `--seed` | 随机种子 | 42 |
-| `--defer_qps` | 分离延迟/QPS 测量 (`1`=开启) | 关闭 |
+| `--defer_qps` | 分离延迟/QPS 测量 (`1`=开启) | 开启 |
 | `--save_index` | 保存索引到文件 (`1`=开启) | 关闭 |
 | `--load_index` | 从文件加载索引 (`1`=开启) | 关闭 |
 | `--index_path` | 索引文件路径 (保存/加载用) | 无 |
@@ -370,6 +383,118 @@ results/ablation_YYYYMMDD_HHMMSS/
 在默认交替模式下，K=1 的 16 线程 QPS 测试会驱逐 L3 缓存中的索引数据。随后 K=10 的延迟测量（仅 1000 次 warmup）不足以恢复 M=8+efc=400 这种内存布局分散的图结构的缓存状态，导致约 1-5% 的查询因 LLC cache miss 而延迟飙升。
 
 该问题经 `sudo perf stat` 验证：baseline 比 defer_qps 多出 **22.7% 的 LLC-load-misses**（约 259 万次），集中在 K=10 延迟测量阶段。
+
+---
+
+# SIFT1M Benchmark
+
+SIFT1M 是标准的 ANN (Approximate Nearest Neighbor) benchmark 数据集，常用于评估向量检索算法性能。
+
+## 数据集特点
+
+- **维度**: 128 (SIFT 特征描述符)
+- **基向量数**: 1,000,000
+- **查询向量数**: 10,000
+- **Ground Truth**: 每个查询的 100 个最近邻
+- **距离度量**: L2 (欧氏距离)
+
+## 快速开始
+
+### 1. 下载 SIFT1M 数据
+
+```bash
+python scripts/00_download_sift1m.py --output_dir data/sift1m
+```
+
+这会下载并解压 SIFT1M 数据集到 `data/sift1m/` 目录：
+- `sift1m_base.fvecs` - 1M 基向量
+- `sift1m_query.fvecs` - 10K 查询向量
+- `sift1m_groundtruth.ivecs` - Ground Truth
+
+### 2. 构建 C++ Benchmark
+
+```bash
+cd benchmark && mkdir -p build && cd build && cmake .. && make -j$(nproc) bench_sift1m
+cd ../..
+```
+
+### 3. 运行 Benchmark
+
+```bash
+./run_sift1m_benchmark.sh
+```
+
+该脚本会：
+1. 自动下载数据（如果不存在）
+2. 编译 benchmark（如果未编译）
+3. 遍历多组 HNSW 参数运行测试
+4. 汇总结果并生成可视化图表
+
+### 4. 手动运行单次测试
+
+```bash
+./benchmark/build/bench_sift1m \
+    --base_path data/sift1m/sift1m_base.fvecs \
+    --query_path data/sift1m/sift1m_query.fvecs \
+    --gt_path data/sift1m/sift1m_groundtruth.ivecs \
+    --output results/sift1m_test.json \
+    --metric l2 \
+    --M 16 \
+    --ef_construction 200 \
+    --ef_search 10,20,50,100,200,500 \
+    --K 1,10,100 \
+    --num_threads 64 \
+    --defer_qps true
+```
+
+## 输出目录结构
+
+```
+results/sift1m_YYYYMMDD_HHMMSS/
+├── raw/
+│   ├── M16_efc100.json
+│   ├── M16_efc200.json
+│   ├── M16_efc400.json
+│   ├── M32_efc100.json
+│   └── ...
+├── summary.json
+├── summary.csv
+├── best_configs.json
+├── run_meta.json
+└── plots/
+    ├── recall_vs_qps.png
+    ├── recall_vs_latency_p99.png
+    ├── ef_search_vs_recall.png
+    ├── ef_search_vs_latency.png
+    ├── thread_scalability.png
+    ├── memory_comparison.png
+    └── build_time_comparison.png
+```
+
+## SIFT1M vs HotpotQA 对比
+
+| 特性 | SIFT1M | HotpotQA |
+|------|--------|----------|
+| 维度 | 128 | 1024 |
+| 基向量数 | 1,000,000 | 可变 (子集10K) |
+| 查询数 | 10,000 | 可变 (子集5K) |
+| 距离度量 | L2 | Inner Product |
+| 数据来源 | SIFT 特征 | BGE 文本嵌入 |
+| 数据预处理 | 无需 | 需要解析 + 嵌入生成 |
+| 典型索引大小 | ~600MB (M=16) | ~30MB (10K docs) |
+
+## 预期性能
+
+在 128 核服务器上的典型结果：
+
+| M | ef_construction | Build Time | Index Memory | Recall@10 (ef=100) |
+|---|-----------------|------------|--------------|-------------------|
+| 16 | 100 | ~30s | ~580MB | ~0.97 |
+| 16 | 200 | ~45s | ~580MB | ~0.98 |
+| 32 | 200 | ~70s | ~1.1GB | ~0.99 |
+| 32 | 400 | ~120s | ~1.1GB | ~0.995 |
+
+---
 
 ## 注意事项
 
