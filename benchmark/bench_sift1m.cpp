@@ -365,7 +365,7 @@ int main(int argc, char **argv) {
   auto measure_qps = [&](int ef_search, int K,
                          std::map<std::string, std::string> &entry) {
     index->setEf(ef_search);
-    for (int num_t : {2, 4, 8, 16, 32, 64}) {
+    for (int num_t : {1, 2, 4, 8, 16, 32, 48, 64, 96, 128}) {
       if (num_t > cfg.num_threads)
         break;
 

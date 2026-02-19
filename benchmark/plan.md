@@ -468,7 +468,7 @@ results/
     └── run_meta.json                 # 运行环境元数据
 ```
 
-### 4.2 汇总脚本：`scripts/06_aggregate_results.py`
+### 4.2 汇总脚本：`scripts/common/aggregate_results.py`
 
 ```python
 """
@@ -489,7 +489,7 @@ best_configs.json 按以下目标各给出最优配置：
 """
 ```
 
-### 4.3 可视化脚本：`scripts/07_plot_results.py`
+### 4.3 可视化脚本：`scripts/common/plot_results.py`
 
 ```python
 """
@@ -551,7 +551,7 @@ best_configs.json 按以下目标各给出最优配置：
 """
 ```
 
-### 4.4 运行环境元数据：`scripts/08_collect_meta.py`
+### 4.4 运行环境元数据：`scripts/common/collect_meta.py`
 
 ```python
 """
@@ -603,13 +603,13 @@ echo "=========================================="
 
 # ---- Phase 1: 数据准备 ----
 echo "[Phase 1] Parsing HotpotQA..."
-python scripts/01_parse_hotpotqa.py \
+python scripts/hotpotqa/parse_data.py \
     --input $DATA_DIR/hotpot_train_v1.1.json \
     --output_dir $DATA_DIR
 
 # ---- Phase 2: Embedding 生成 ----
 echo "[Phase 2] Generating embeddings (ONNX)..."
-python scripts/02_generate_embeddings.py \
+python scripts/hotpotqa/generate_embeddings.py \
     --corpus $DATA_DIR/corpus.jsonl \
     --queries $DATA_DIR/queries.jsonl \
     --model_dir models/bge-large-en-v1.5-onnx \
@@ -619,7 +619,7 @@ python scripts/02_generate_embeddings.py \
     --batch_size 64
 
 echo "[Phase 2.5] Computing exact KNN ground truth..."
-python scripts/03_compute_knn_gt.py \
+python scripts/hotpotqa/compute_knn_gt.py \
     --corpus_emb $DATA_DIR/corpus_embeddings.npy \
     --query_emb $DATA_DIR/query_embeddings.npy \
     --output_dir $DATA_DIR \
@@ -627,7 +627,7 @@ python scripts/03_compute_knn_gt.py \
     --batch_size 1000
 
 echo "[Phase 2.6] Exporting fvecs/ivecs..."
-python scripts/04_export_vecs.py \
+python scripts/hotpotqa/export_vecs.py \
     --corpus_emb $DATA_DIR/corpus_embeddings.npy \
     --query_emb $DATA_DIR/query_embeddings.npy \
     --gt $DATA_DIR/knn_gt_indices.npy \
@@ -656,17 +656,17 @@ done
 
 # ---- Phase 4: 汇总与可视化 ----
 echo "[Phase 4] Aggregating results..."
-python scripts/06_aggregate_results.py \
+python scripts/common/aggregate_results.py \
     --input_dir "$RAW_DIR" \
     --output_dir "$RESULT_DIR"
 
 echo "[Phase 4] Generating plots..."
-python scripts/07_plot_results.py \
+python scripts/common/plot_results.py \
     --summary_csv "${RESULT_DIR}/summary.csv" \
     --output_dir "$PLOT_DIR"
 
 echo "[Phase 4] Collecting run metadata..."
-python scripts/08_collect_meta.py \
+python scripts/common/collect_meta.py \
     --output "${RESULT_DIR}/run_meta.json" \
     --data_dir "$DATA_DIR" \
     --hnswlib_dir "./hnswlib"

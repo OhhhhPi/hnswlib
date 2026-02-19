@@ -5,13 +5,33 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 M_VALUES="16 32 48"
 EFC_VALUES="100 200 400"
 EF_SEARCH_VALUES="10,20,50,100,200,500"
 K_VALUES="1,10,100"
 NUM_THREADS=64
+
+# ---------------------------------------------------------------------------
+# NUMA policy — reduces cross-node memory latency on multi-socket systems.
+#   --interleave=all: stripe index memory across all NUMA nodes so that
+#   threads on any node have roughly equal average access latency.
+# OMP_PROC_BIND=spread + OMP_PLACES=cores: evenly distribute OpenMP threads
+#   across all cores/sockets to avoid oversubscribing a single node.
+# ---------------------------------------------------------------------------
+export OMP_PROC_BIND=spread
+export OMP_PLACES=cores
+
+NUMA_CMD=""
+if command -v numactl &>/dev/null; then
+    NUMA_CMD="numactl --interleave=all"
+    echo "[NUMA] Using: $NUMA_CMD"
+    echo "[NUMA] Detected $(numactl --hardware 2>/dev/null | head -1)"
+else
+    echo "[NUMA] numactl not found — running without NUMA control"
+fi
 
 DATA_DIR="data/sift1m"
 BASE_PATH="$DATA_DIR/sift1m_base.fvecs"
@@ -23,7 +43,7 @@ SIFT1M_URL="ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz"
 check_data() {
     if [[ ! -f "$BASE_PATH" || ! -f "$QUERY_PATH" || ! -f "$GT_PATH" ]]; then
         echo "SIFT1M data not found. Downloading..."
-        python scripts/00_download_sift1m.py --output_dir "$DATA_DIR"
+        python scripts/sift1m/download_data.py --output_dir "$DATA_DIR"
     fi
 }
 
@@ -45,7 +65,7 @@ run_benchmark() {
     
     echo "Running: M=$M, ef_construction=$EFC"
     
-    ./benchmark/build/bench_sift1m \
+    $NUMA_CMD ./benchmark/build/bench_sift1m \
         --base_path "$BASE_PATH" \
         --query_path "$QUERY_PATH" \
         --gt_path "$GT_PATH" \
@@ -82,17 +102,17 @@ main() {
     done
     
     echo "=== Aggregating Results ==="
-    python scripts/06_aggregate_results.py \
+    python scripts/common/aggregate_results.py \
         --input_dir "$RUN_DIR/raw" \
         --output_dir "$RUN_DIR"
     
     echo "=== Generating Plots ==="
-    python scripts/07_plot_results.py \
+    python scripts/common/plot_results.py \
         --summary_csv "$RUN_DIR/summary.csv" \
         --output_dir "$RUN_DIR/plots"
     
     echo "=== Collecting Metadata ==="
-    python scripts/08_collect_meta.py \
+    python scripts/common/collect_meta.py \
         --output "$RUN_DIR/run_meta.json" \
         --data_dir "$DATA_DIR" \
         --hnswlib_dir .

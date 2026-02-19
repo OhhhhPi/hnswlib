@@ -13,7 +13,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Configuration
 DATA_DIR="./data"
@@ -112,7 +113,7 @@ fi
 # ---- Phase 1: Data Parsing ----
 echo ""
 echo "[Phase 1] Parsing HotpotQA..."
-python scripts/01_parse_hotpotqa.py \
+python scripts/hotpotqa/parse_data.py \
     --input "$DATA_DIR/hotpot_train_v1.1.json" \
     --output_dir "$DATA_DIR"
 
@@ -121,7 +122,7 @@ if [ "$SKIP_EMBEDDING" = false ]; then
     echo ""
     echo "[Phase 2] Generating embeddings..."
     
-    python scripts/02_generate_embeddings.py \
+    python scripts/hotpotqa/generate_embeddings.py \
         --corpus "$DATA_DIR/corpus.jsonl" \
         --queries "$DATA_DIR/queries.jsonl" \
         --model_name "BAAI/bge-large-en-v1.5" \
@@ -132,7 +133,7 @@ if [ "$SKIP_EMBEDDING" = false ]; then
     
     echo ""
     echo "[Phase 2.5] Computing exact KNN ground truth..."
-    python scripts/03_compute_knn_gt.py \
+    python scripts/hotpotqa/compute_knn_gt.py \
         --corpus_emb "$DATA_DIR/corpus_embeddings.npy" \
         --query_emb "$DATA_DIR/query_embeddings.npy" \
         --output_dir "$DATA_DIR" \
@@ -141,7 +142,7 @@ if [ "$SKIP_EMBEDDING" = false ]; then
     
     echo ""
     echo "[Phase 2.6] Exporting fvecs/ivecs..."
-    python scripts/04_export_vecs.py \
+    python scripts/hotpotqa/export_vecs.py \
         --corpus_emb "$DATA_DIR/corpus_embeddings.npy" \
         --query_emb "$DATA_DIR/query_embeddings.npy" \
         --gt "$DATA_DIR/knn_gt_indices.npy" \
@@ -162,7 +163,7 @@ if [ "$SKIP_BUILD" = false ]; then
     cd benchmark/build
     cmake .. -DCMAKE_BUILD_TYPE=Release
     make -j$(nproc)
-    cd "$SCRIPT_DIR"
+    cd "$PROJECT_ROOT"
 fi
 
 if [ ! -f "$BENCH_BIN" ]; then
@@ -206,19 +207,19 @@ done
 # ---- Phase 4: Results Aggregation ----
 echo ""
 echo "[Phase 4] Aggregating results..."
-python scripts/06_aggregate_results.py \
+python scripts/common/aggregate_results.py \
     --input_dir "$RAW_DIR" \
     --output_dir "$RESULT_DIR"
 
 echo ""
 echo "[Phase 4] Generating plots..."
-python scripts/07_plot_results.py \
+python scripts/common/plot_results.py \
     --summary_csv "${RESULT_DIR}/summary.csv" \
     --output_dir "$PLOT_DIR"
 
 echo ""
 echo "[Phase 4] Collecting run metadata..."
-python scripts/08_collect_meta.py \
+python scripts/common/collect_meta.py \
     --output "${RESULT_DIR}/run_meta.json" \
     --data_dir "$DATA_DIR" \
     --hnswlib_dir "."

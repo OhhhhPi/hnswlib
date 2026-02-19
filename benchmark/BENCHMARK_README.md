@@ -18,44 +18,56 @@
 ## 目录结构
 
 ```
-├── benchmark/                 # C++ 基准测试程序
-│   ├── bench_hotpotqa.cpp     # 主程序
-│   ├── io_utils.h             # fvecs/ivecs 读写
-│   ├── timer.h                # 高精度计时
-│   ├── memory_utils.h         # 内存统计
-│   ├── metrics.h              # Recall 计算
-│   ├── CMakeLists.txt         # 构建配置
-│   ├── build/                 # 编译输出
-│   └── run_ablation_test.sh   # 延迟测量消融实验
-├── scripts/                   # Python 数据处理脚本
-│   ├── 01_parse_hotpotqa.py   # 解析 HotpotQA 数据
-│   ├── 02_generate_embeddings_simple.py  # 生成向量嵌入
-│   ├── 03_compute_knn_gt.py   # 计算精确 KNN Ground Truth
-│   ├── 04_export_vecs.py      # 导出为 fvecs/ivecs 格式
-│   ├── 06_aggregate_results.py # 汇总结果
-│   ├── 07_plot_results.py     # 生成可视化图表
-│   └── 08_collect_meta.py     # 收集系统元数据
-├── data/                      # 数据文件 (gitignore)
-│   ├── hotpot_train_v1.1.json # 原始数据
-│   ├── corpus.jsonl           # 文档语料
-│   ├── queries.jsonl          # 查询集合
-│   ├── corpus_embeddings.npy  # 文档向量
-│   ├── query_embeddings.npy   # 查询向量
-│   ├── corpus_vectors.fvecs   # C++ 格式文档向量
-│   ├── query_vectors.fvecs    # C++ 格式查询向量
-│   └── ground_truth.ivecs     # 精确 KNN 结果
-├── models/                    # 模型文件
+├── benchmark/                          # C++ 基准测试程序
+│   ├── bench_hotpotqa.cpp              # HotpotQA 主程序
+│   ├── bench_sift1m.cpp                # SIFT1M 主程序
+│   ├── io_utils.h                      # fvecs/ivecs 读写
+│   ├── timer.h                         # 高精度计时
+│   ├── memory_utils.h                  # 内存统计
+│   ├── metrics.h                       # Recall 计算
+│   ├── CMakeLists.txt                  # 构建配置
+│   └── build/                          # 编译输出
+├── scripts/                            # 所有脚本 (按流水线分目录)
+│   ├── common/                         # 共享工具
+│   │   ├── aggregate_results.py        # 汇总结果
+│   │   ├── plot_results.py             # 生成可视化图表
+│   │   └── collect_meta.py             # 收集系统元数据
+│   ├── hotpotqa/                       # HotpotQA 流水线
+│   │   ├── parse_data.py               # 解析 HotpotQA 数据
+│   │   ├── generate_embeddings.py      # 多进程向量嵌入
+│   │   ├── generate_embeddings_simple.py # 单进程嵌入 (调试用)
+│   │   ├── compute_knn_gt.py           # 计算精确 KNN Ground Truth
+│   │   ├── export_vecs.py              # 导出 fvecs/ivecs 格式
+│   │   ├── run_all.sh                  # 完整流水线一键运行
+│   │   ├── run_benchmark.sh            # 仅运行 C++ benchmark
+│   │   └── run_latency_ablation.sh     # 延迟测量消融实验
+│   ├── sift1m/                         # SIFT1M 流水线
+│   │   ├── download_data.py            # 下载 SIFT1M 数据集
+│   │   └── run_benchmark.sh            # 运行 SIFT1M benchmark
+│   └── dim_ablation/                   # 维度消融实验
+│       ├── prepare_data.py             # 零填充 + PCA 分析
+│       ├── plot_results.py             # 消融实验可视化
+│       └── run_ablation.sh             # 一键运行消融实验
+├── data/                               # 数据文件 (gitignore)
+│   ├── hotpot_train_v1.1.json          # 原始数据
+│   ├── corpus.jsonl                    # 文档语料
+│   ├── queries.jsonl                   # 查询集合
+│   ├── corpus_embeddings.npy           # 文档向量
+│   ├── query_embeddings.npy            # 查询向量
+│   ├── corpus_vectors.fvecs            # C++ 格式文档向量
+│   ├── query_vectors.fvecs             # C++ 格式查询向量
+│   ├── ground_truth.ivecs              # 精确 KNN 结果
+│   └── sift1m/                         # SIFT1M 数据
+├── models/                             # 模型文件
 │   └── Xorbits/bge-large-en-v1.5/
-├── results/                   # 输出结果
-│   └── YYYYMMDD_HHMMSS/
-│       ├── raw/*.json         # 原始结果
-│       ├── summary.json       # 汇总 JSON
-│       ├── summary.csv        # 汇总 CSV
-│       ├── best_configs.json  # 最佳配置
-│       ├── run_meta.json      # 运行元数据
-│       └── plots/*.png        # 可视化图表
-├── run_all.sh                 # 一键运行脚本
-└── run_benchmark_only.sh      # 仅运行 benchmark
+└── results/                            # 输出结果
+    └── YYYYMMDD_HHMMSS/
+        ├── raw/*.json                  # 原始结果
+        ├── summary.json                # 汇总 JSON
+        ├── summary.csv                 # 汇总 CSV
+        ├── best_configs.json           # 最佳配置
+        ├── run_meta.json               # 运行元数据
+        └── plots/*.png                 # 可视化图表
 ```
 
 ## 依赖要求
@@ -91,28 +103,28 @@ cd benchmark && mkdir -p build && cd build && cmake .. && make -j$(nproc)
 cd ../..
 
 # Step 1: 解析 HotpotQA 数据 (创建子集)
-python scripts/01_parse_hotpotqa.py \
+python scripts/hotpotqa/parse_data.py \
     --input data/hotpot_train_v1.1.json \
     --output_dir data \
     --subset_docs 10000 \
     --subset_queries 5000
 
 # Step 2: 生成向量嵌入 (耗时较长，约 20 分钟)
-python scripts/02_generate_embeddings_simple.py \
+python scripts/hotpotqa/generate_embeddings_simple.py \
     --corpus data/corpus_subset.jsonl \
     --queries data/queries_subset.jsonl \
     --output_dir data \
     --model_name models/Xorbits/bge-large-en-v1.5
 
 # Step 3: 计算精确 KNN Ground Truth (约 2 秒)
-python scripts/03_compute_knn_gt.py \
+python scripts/hotpotqa/compute_knn_gt.py \
     --corpus_emb data/corpus_embeddings.npy \
     --query_emb data/query_embeddings.npy \
     --output_dir data \
     --top_k 100
 
 # Step 4: 导出为 C++ fvecs/ivecs 格式 (约 1 秒)
-python scripts/04_export_vecs.py \
+python scripts/hotpotqa/export_vecs.py \
     --corpus_emb data/corpus_embeddings.npy \
     --query_emb data/query_embeddings.npy \
     --gt data/knn_gt_indices.npy \
@@ -136,17 +148,17 @@ mkdir -p $RUN_DIR/raw
     --num_threads 16
 
 # Step 7: 汇总结果
-python scripts/06_aggregate_results.py \
+python scripts/common/aggregate_results.py \
     --input_dir $RUN_DIR/raw \
     --output_dir $RUN_DIR
 
 # Step 8: 生成可视化图表
-python scripts/07_plot_results.py \
+python scripts/common/plot_results.py \
     --summary_csv $RUN_DIR/summary.csv \
     --output_dir $RUN_DIR/plots
 
 # Step 9: 收集系统元数据
-python scripts/08_collect_meta.py \
+python scripts/common/collect_meta.py \
     --output $RUN_DIR/run_meta.json \
     --data_dir data \
     --hnswlib_dir .
@@ -172,17 +184,17 @@ ef_search=200
 ### 4. 一键运行 (可选)
 
 ```bash
-./run_all.sh
+bash scripts/hotpotqa/run_all.sh
 ```
 
 该脚本会依次执行完整流程
 
 ### 5. 仅运行 Benchmark（推荐复用数据时使用）
 
-当你已经准备好 `data/` 下的向量与 Ground Truth（`corpus_vectors.fvecs`、`query_vectors.fvecs`、`ground_truth.ivecs`），并且只想快速对比 HNSW 参数组合时，建议使用仓库根目录脚本：
+当你已经准备好 `data/` 下的向量与 Ground Truth（`corpus_vectors.fvecs`、`query_vectors.fvecs`、`ground_truth.ivecs`），并且只想快速对比 HNSW 参数组合时：
 
 ```bash
-./run_benchmark_only.sh
+bash scripts/hotpotqa/run_benchmark.sh
 ```
 
 #### 适用场景
@@ -197,14 +209,14 @@ ef_search=200
 2. 遍历多组参数运行 C++ benchmark（默认 `M=8,16,32,48`；`ef_construction=100,200,400`）
 3. 将每组原始结果写入 `results/<timestamp>/raw/*.json`
 4. 自动执行：
-   - `scripts/06_aggregate_results.py`
-   - `scripts/07_plot_results.py`
-   - `scripts/08_collect_meta.py`
+   - `scripts/common/aggregate_results.py`
+   - `scripts/common/plot_results.py`
+   - `scripts/common/collect_meta.py`
 5. 在 `results/<timestamp>/` 下输出 `summary.csv`、`best_configs.json`、图表和元数据
 
 #### 可配置项（编辑脚本顶部）
 
-`run_benchmark_only.sh` 中可直接调整：
+`scripts/hotpotqa/run_benchmark.sh` 中可直接调整：
 
 - `M_VALUES`：例如 `"8 16 32 48"`
 - `EFC_VALUES`：例如 `"100 200 400"`
@@ -320,7 +332,7 @@ ef_search=200
 
 ## 可视化
 
-运行 `07_plot_results.py` 生成以下图表：
+运行 `scripts/common/plot_results.py` 生成以下图表：
 
 1. **recall_vs_qps.png** - 召回率 vs QPS (Pareto 曲线)
 2. **recall_vs_latency_p99.png** - 召回率 vs P99 延迟
@@ -330,7 +342,7 @@ ef_search=200
 6. **memory_comparison.png** - 内存占用对比
 7. **build_time_comparison.png** - 构建时间对比
 
-## 延迟测量消融实验 (`run_ablation_test.sh`)
+## 延迟测量消融实验 (`run_latency_ablation.sh`)
 
 该脚本用于验证不同测量策略对延迟指标（尤其是 p99 尾部延迟）的影响，针对多线程 QPS 测试引起的 L3 缓存污染问题。
 
@@ -338,8 +350,7 @@ ef_search=200
 
 ```bash
 # 需先准备好 data/ 下的 fvecs/ivecs 文件
-cd benchmark
-bash run_ablation_test.sh
+bash scripts/hotpotqa/run_latency_ablation.sh
 ```
 
 ### 实验内容
@@ -403,7 +414,7 @@ SIFT1M 是标准的 ANN (Approximate Nearest Neighbor) benchmark 数据集，常
 ### 1. 下载 SIFT1M 数据
 
 ```bash
-python scripts/00_download_sift1m.py --output_dir data/sift1m
+python scripts/sift1m/download_data.py --output_dir data/sift1m
 ```
 
 这会下载并解压 SIFT1M 数据集到 `data/sift1m/` 目录：
@@ -421,7 +432,7 @@ cd ../..
 ### 3. 运行 Benchmark
 
 ```bash
-./run_sift1m_benchmark.sh
+bash scripts/sift1m/run_benchmark.sh
 ```
 
 该脚本会：
@@ -493,6 +504,107 @@ results/sift1m_YYYYMMDD_HHMMSS/
 | 16 | 200 | ~45s | ~580MB | ~0.98 |
 | 32 | 200 | ~70s | ~1.1GB | ~0.99 |
 | 32 | 400 | ~120s | ~1.1GB | ~0.995 |
+
+---
+
+# 维度消融实验 (Dimensionality Ablation)
+
+该实验通过对 SIFT1M 向量进行零填充 (zero-padding)，将 128 维向量扩展到 {256, 512, 1024} 维，用于隔离 **向量维度** 对 HNSW 性能的影响，排除数据分布差异的干扰。
+
+## 实验原理
+
+**核心思路**：零填充不改变向量间的 L2 距离。
+
+```
+L2(pad(x), pad(y)) = sqrt(Σ(xi-yi)² + Σ0²) = L2(x, y)
+```
+
+因此：
+- **最近邻关系完全不变** → Ground Truth 可直接复用
+- **搜索问题难度完全不变** → 图结构遍历行为相同
+- **唯一变化的是每次距离计算的 FLOP** → 纯粹隔离计算开销
+
+如果 QPS 与 1/dim 线性相关，则证明 SIFT1M 和 HotpotQA 之间的性能差异主要来自维度计算开销，而非数据分布差异。
+
+## 辅助分析：PCA 本征维度
+
+脚本同时对 SIFT1M 和 HotpotQA 进行 PCA 分析，计算累积方差解释率，揭示两个数据集的本征维度差异。这有助于理解：
+- HotpotQA 的 1024 维中有多少是"有效维度"
+- 数据分布的"内在复杂度"对搜索难度的贡献
+
+## 目录结构
+
+```
+data/sift1m_dim_ablation/
+├── dim_256/
+│   ├── base.fvecs          # 零填充到 256 维
+│   ├── query.fvecs
+│   └── groundtruth.ivecs   # 与原始 SIFT1M 相同
+├── dim_512/
+│   ├── base.fvecs
+│   ├── query.fvecs
+│   └── groundtruth.ivecs
+├── dim_1024/
+│   ├── base.fvecs
+│   ├── query.fvecs
+│   └── groundtruth.ivecs
+├── pca_analysis.json       # PCA 本征维度分析
+└── ablation_meta.json      # 实验元数据
+
+results/dim_ablation_YYYYMMDD_HHMMSS/
+├── raw/*.json              # 每组参数的原始结果
+├── summary.csv             # 汇总 (含不同 dim 的行)
+├── summary.json
+├── best_configs.json
+├── scaling_analysis.json   # 观测 vs 理论缩放因子
+├── pca_analysis.json       # PCA 分析副本
+├── run_meta.json
+└── plots/
+    ├── qps_vs_dim.png          # QPS 随维度变化
+    ├── latency_vs_dim.png      # 延迟随维度变化
+    ├── recall_vs_dim.png       # Recall 稳定性 (应为常数)
+    ├── build_vs_dim.png        # 构建时间/吞吐随维度变化
+    ├── memory_vs_dim.png       # 内存随维度变化
+    ├── scaling_analysis.png    # 观测 vs 理论缩放因子
+    ├── thread_scalability.png  # 不同维度下的线程扩展性
+    └── pca_explained_var.png   # PCA 累积方差解释率
+```
+
+## 快速开始
+
+```bash
+# 一键运行 (需先准备好 data/sift1m/ 下的 SIFT1M 数据)
+bash scripts/dim_ablation/run_ablation.sh
+```
+
+## 可配置项（编辑脚本顶部）
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `TARGET_DIMS` | `256 512 1024` | 零填充目标维度 |
+| `M_VALUES` | `16 32` | HNSW M 参数 |
+| `EFC_VALUES` | `200` | ef_construction (固定以减少运行时间) |
+| `EF_SEARCH_VALUES` | `10,50,100,200,500` | ef_search 列表 |
+| `NUM_THREADS` | `64` | 最大线程数 |
+
+## 相关脚本
+
+| 脚本 | 说明 |
+|------|------|
+| `scripts/dim_ablation/prepare_data.py` | 数据准备：零填充 + PCA 分析 |
+| `scripts/dim_ablation/plot_results.py` | 消融实验可视化 |
+| `scripts/dim_ablation/run_ablation.sh` | 一键驱动脚本 |
+
+## 预期结果
+
+| 维度 | QPS 缩放 (理论) | 延迟缩放 (理论) | Recall 变化 |
+|------|-----------------|-----------------|-------------|
+| 128 (基准) | 1.0x | 1.0x | 基准值 |
+| 256 | 0.5x | 2.0x | 不变 |
+| 512 | 0.25x | 4.0x | 不变 |
+| 1024 | 0.125x | 8.0x | 不变 |
+
+> 如果观测到的缩放因子接近理论值，则证明 HotpotQA 与 SIFT1M 的性能差异主要来自维度计算开销。如果观测值偏离理论值，差异部分可能来自 SIMD 效率、缓存行为等微架构因素。
 
 ---
 

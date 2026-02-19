@@ -242,20 +242,23 @@ int main(int argc, char **argv) {
   size_t index_memory_kb = 0;
 
   if (cfg.load_index && !cfg.index_path.empty()) {
-    std::cout << "\n=== Loading Index from " << cfg.index_path << " ===" << std::endl;
+    std::cout << "\n=== Loading Index from " << cfg.index_path
+              << " ===" << std::endl;
     bench::Timer load_timer;
     index = new hnswlib::HierarchicalNSW<float>(space, cfg.index_path);
     double load_sec = load_timer.elapsed_sec();
     std::cout << "Index loaded in " << load_sec << " sec" << std::endl;
     std::cout << "Index max_elements: " << index->max_elements_ << std::endl;
-    std::cout << "Index cur_element_count: " << index->cur_element_count << std::endl;
+    std::cout << "Index cur_element_count: " << index->cur_element_count
+              << std::endl;
     mem_tracker.snapshot("after_build");
     index_memory_kb = mem_tracker.delta_rss_kb("after_load_gt", "after_build");
-    std::cout << "Index memory: " << (index_memory_kb / 1024.0) << " MB" << std::endl;
+    std::cout << "Index memory: " << (index_memory_kb / 1024.0) << " MB"
+              << std::endl;
   } else {
     std::cout << "\n=== Building Index ===" << std::endl;
-    index = new hnswlib::HierarchicalNSW<float>(
-        space, num_base, cfg.M, cfg.ef_construction, cfg.seed);
+    index = new hnswlib::HierarchicalNSW<float>(space, num_base, cfg.M,
+                                                cfg.ef_construction, cfg.seed);
 
     bench::Timer build_timer;
 
@@ -297,7 +300,8 @@ int main(int argc, char **argv) {
   std::cout << "  Warmup queries: " << cfg.warmup_queries << std::endl;
 
   // --- Helper lambda: measure latency for one (ef_search, K) combo ---
-  auto measure_latency = [&](int ef_search, int K) -> std::map<std::string, std::string> {
+  auto measure_latency = [&](int ef_search,
+                             int K) -> std::map<std::string, std::string> {
     index->setEf(ef_search);
 
     int warmup = std::min(cfg.warmup_queries, num_query);
