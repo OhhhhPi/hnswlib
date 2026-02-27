@@ -1,0 +1,4 @@
+CompileFlags:
+  Remove:
+    - -ftree-vectorizer-verbose=0
+    - -ftree-vectorizer-verbose=*

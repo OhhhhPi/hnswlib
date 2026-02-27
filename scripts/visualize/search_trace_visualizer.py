@@ -80,10 +80,18 @@ def read_ivecs(path):
 def load_dataset(dataset, data_dir):
     dd = Path(data_dir)
     if dataset == "hotpotqa":
-        base = np.load(dd / "corpus_embeddings.npy")
-        queries = np.load(dd / "query_embeddings.npy")
-        gtp = dd / "knn_gt_indices.npy"
-        gt = np.load(gtp) if gtp.exists() else read_ivecs(dd / "ground_truth.ivecs")
+        hd = dd / "hotpotqa"
+        base = np.load(hd / "corpus_embeddings.npy")
+        queries = np.load(hd / "query_embeddings.npy")
+        gtp = hd / "knn_gt_indices.npy"
+        gt = np.load(gtp) if gtp.exists() else read_ivecs(hd / "ground_truth.ivecs")
+        space = "ip"
+    elif dataset == "locomo":
+        ld = dd / "locomo"
+        base = np.load(ld / "corpus_embeddings.npy")
+        queries = np.load(ld / "query_embeddings.npy")
+        gtp = ld / "knn_gt_indices.npy"
+        gt = np.load(gtp) if gtp.exists() else read_ivecs(ld / "ground_truth.ivecs")
         space = "ip"
     elif dataset == "sift1m":
         base = read_fvecs(dd / "sift1m" / "sift1m_base.fvecs")
@@ -813,7 +821,7 @@ def build_html(figs_3d, figs_edge, stat_figs, qdata, params, path):
 
 def main():
     ap = argparse.ArgumentParser(description="HNSW Search Trace Visualizer")
-    ap.add_argument("--dataset", choices=["hotpotqa", "sift1m"], default="hotpotqa")
+    ap.add_argument("--dataset", choices=["hotpotqa", "locomo", "sift1m"], default="hotpotqa")
     ap.add_argument("--data_dir", default="data")
     ap.add_argument("--M", type=int, default=16)
     ap.add_argument("--ef_construction", type=int, default=200)

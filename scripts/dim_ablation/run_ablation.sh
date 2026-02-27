@@ -60,7 +60,7 @@ fi
 
 SIFT1M_DIR="data/sift1m"
 ABLATION_DATA_DIR="data/sift1m_dim_ablation"
-HOTPOTQA_DIR="data"
+HOTPOTQA_DIR="data/hotpotqa"
 
 RESULTS_BASE="results"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

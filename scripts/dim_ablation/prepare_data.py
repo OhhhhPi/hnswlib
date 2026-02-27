@@ -131,7 +131,7 @@ def main():
         help="Path to original SIFT1M data directory"
     )
     parser.add_argument(
-        "--hotpotqa_dir", default="data",
+        "--hotpotqa_dir", default="data/hotpotqa",
         help="Path to HotpotQA data directory (for PCA comparison)"
     )
     parser.add_argument(

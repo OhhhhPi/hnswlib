@@ -1,5 +1,5 @@
 #!/bin/bash
-# run_all.sh - Complete HotpotQA RAG Benchmark Pipeline
+# run_all.sh - Complete LoCoMo Benchmark Pipeline
 #
 # Usage: ./run_all.sh [OPTIONS]
 #
@@ -17,11 +17,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Configuration
-DATA_DIR="./data/hotpotqa"
+DATA_DIR="./data/locomo"
 MODELS_DIR="./models"
 RESULTS_BASE="./results"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULT_DIR="${RESULTS_BASE}/${TIMESTAMP}"
+RESULT_DIR="${RESULTS_BASE}/locomo_${TIMESTAMP}"
 RAW_DIR="${RESULT_DIR}/raw"
 PLOT_DIR="${RESULT_DIR}/plots"
 
@@ -87,7 +87,7 @@ fi
 mkdir -p "$DATA_DIR" "$MODELS_DIR" "$RAW_DIR" "$PLOT_DIR"
 
 echo "=========================================="
-echo " HotpotQA → HNSW Benchmark Pipeline"
+echo " LoCoMo → HNSW Benchmark Pipeline"
 echo "=========================================="
 echo " Run ID: ${TIMESTAMP}"
 echo " Results: ${RESULT_DIR}"
@@ -96,32 +96,26 @@ echo " Workers: ${NUM_WORKERS}, Threads/Worker: ${THREADS_PER_WORKER}"
 echo "=========================================="
 echo ""
 
-# ---- Phase 0: Environment Setup ----
-echo "[Phase 0] Environment Setup..."
-
+# ---- Phase 0: Download Data ----
 if [ "$SKIP_DOWNLOAD" = false ]; then
-    if [ ! -f "$DATA_DIR/hotpot_train_v1.1.json" ]; then
-        echo "Downloading HotpotQA training set..."
-        wget -q --show-progress \
-            http://curtis.ml.cmu.edu/datasets/hotpot/hotpot_train_v1.1.json \
-            -O "$DATA_DIR/hotpot_train_v1.1.json"
-    else
-        echo "Data file already exists: $DATA_DIR/hotpot_train_v1.1.json"
-    fi
+    echo "[Phase 0] Downloading LoCoMo dataset..."
+    python scripts/locomo/download_data.py --output_dir "$DATA_DIR"
+else
+    echo "[Phase 0] Skipping download (--skip-download)"
 fi
 
 # ---- Phase 1: Data Parsing ----
 echo ""
-echo "[Phase 1] Parsing HotpotQA..."
-python scripts/hotpotqa/parse_data.py \
-    --input "$DATA_DIR/hotpot_train_v1.1.json" \
+echo "[Phase 1] Parsing LoCoMo..."
+python scripts/locomo/parse_data.py \
+    --input "$DATA_DIR/locomo10.json" \
     --output_dir "$DATA_DIR"
 
 # ---- Phase 2: Embedding Generation ----
 if [ "$SKIP_EMBEDDING" = false ]; then
     echo ""
     echo "[Phase 2] Generating embeddings..."
-    
+
     python scripts/hotpotqa/generate_embeddings.py \
         --corpus "$DATA_DIR/corpus.jsonl" \
         --queries "$DATA_DIR/queries.jsonl" \
@@ -130,7 +124,7 @@ if [ "$SKIP_EMBEDDING" = false ]; then
         --num_workers "$NUM_WORKERS" \
         --threads_per_worker "$THREADS_PER_WORKER" \
         --batch_size "$BATCH_SIZE"
-    
+
     echo ""
     echo "[Phase 2.5] Computing exact KNN ground truth..."
     python scripts/hotpotqa/compute_knn_gt.py \
@@ -139,7 +133,7 @@ if [ "$SKIP_EMBEDDING" = false ]; then
         --output_dir "$DATA_DIR" \
         --top_k 100 \
         --batch_size 1000
-    
+
     echo ""
     echo "[Phase 2.6] Exporting fvecs/ivecs..."
     python scripts/hotpotqa/export_vecs.py \
@@ -175,21 +169,21 @@ echo "Running benchmarks..."
 for M in $M_VALUES; do
     for EFC in $EFC_VALUES; do
         OUTPUT_FILE="${RAW_DIR}/results_M${M}_efc${EFC}.json"
-        
+
         if [ -f "$OUTPUT_FILE" ]; then
             echo "  Skipping M=${M}, efc=${EFC} (already exists)"
             continue
         fi
-        
+
         echo "  Running M=${M}, ef_construction=${EFC}..."
-        
+
         # Limit ef_search values based on MAX_EF_SEARCH
         if [ "$MAX_EF_SEARCH" -lt 1000 ]; then
             EF_SEARCH_ARG=$(echo "$EF_SEARCH_VALUES" | tr ',' '\n' | awk -v max="$MAX_EF_SEARCH" '$1 <= max {printf "%s%s", sep, $1; sep=","}')
         else
             EF_SEARCH_ARG="$EF_SEARCH_VALUES"
         fi
-        
+
         $BENCH_BIN \
             --base_path "$DATA_DIR/corpus_vectors.fvecs" \
             --query_path "$DATA_DIR/query_vectors.fvecs" \

@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-DATA_DIR="./data"
+DATA_DIR="./data/hotpotqa"
 BENCH_BIN="./benchmark/build/bench_hotpotqa"
 RESULT_DIR="./results/ablation_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$RESULT_DIR"

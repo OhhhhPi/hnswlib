@@ -7,6 +7,7 @@
 | 数据集 | 维度 | 基向量数 | 查询数 | 距离度量 | 说明 |
 |--------|------|----------|--------|----------|------|
 | **HotpotQA** | 1024 | 可变 | 可变 | IP | RAG场景，BGE-large-en-v1.5嵌入 |
+| **LoCoMo** | 1024 | 可变 | 可变 | IP | 长对话记忆检索，BGE-large-en-v1.5嵌入 |
 | **SIFT1M** | 128 | 1,000,000 | 10,000 | L2 | 标准ANN benchmark |
 
 ---
@@ -41,6 +42,11 @@
 │   │   ├── run_all.sh                  # 完整流水线一键运行
 │   │   ├── run_benchmark.sh            # 仅运行 C++ benchmark
 │   │   └── run_latency_ablation.sh     # 延迟测量消融实验
+│   ├── locomo/                         # LoCoMo 流水线
+│   │   ├── download_data.py            # 下载 LoCoMo 数据集
+│   │   ├── parse_data.py               # 解析对话数据
+│   │   ├── run_all.sh                  # 完整流水线一键运行
+│   │   └── run_benchmark.sh            # 仅运行 C++ benchmark
 │   ├── sift1m/                         # SIFT1M 流水线
 │   │   ├── download_data.py            # 下载 SIFT1M 数据集
 │   │   └── run_benchmark.sh            # 运行 SIFT1M benchmark
@@ -49,14 +55,20 @@
 │       ├── plot_results.py             # 消融实验可视化
 │       └── run_ablation.sh             # 一键运行消融实验
 ├── data/                               # 数据文件 (gitignore)
-│   ├── hotpot_train_v1.1.json          # 原始数据
-│   ├── corpus.jsonl                    # 文档语料
-│   ├── queries.jsonl                   # 查询集合
-│   ├── corpus_embeddings.npy           # 文档向量
-│   ├── query_embeddings.npy            # 查询向量
-│   ├── corpus_vectors.fvecs            # C++ 格式文档向量
-│   ├── query_vectors.fvecs             # C++ 格式查询向量
-│   ├── ground_truth.ivecs              # 精确 KNN 结果
+│   ├── hotpotqa/                       # HotpotQA 数据
+│   │   ├── hotpot_train_v1.1.json      # 原始数据
+│   │   ├── corpus.jsonl                # 文档语料
+│   │   ├── queries.jsonl               # 查询集合
+│   │   ├── corpus_embeddings.npy       # 文档向量
+│   │   ├── query_embeddings.npy        # 查询向量
+│   │   ├── corpus_vectors.fvecs        # C++ 格式文档向量
+│   │   ├── query_vectors.fvecs         # C++ 格式查询向量
+│   │   └── ground_truth.ivecs          # 精确 KNN 结果
+│   ├── locomo/                         # LoCoMo 数据
+│   │   ├── locomo10.json               # 原始数据
+│   │   ├── corpus.jsonl                # 对话轮次语料
+│   │   ├── queries.jsonl               # QA 查询集合
+│   │   └── ground_truth.jsonl          # 证据映射
 │   └── sift1m/                         # SIFT1M 数据
 ├── models/                             # 模型文件
 │   └── Xorbits/bge-large-en-v1.5/
@@ -104,31 +116,31 @@ cd ../..
 
 # Step 1: 解析 HotpotQA 数据 (创建子集)
 python scripts/hotpotqa/parse_data.py \
-    --input data/hotpot_train_v1.1.json \
-    --output_dir data \
+    --input data/hotpotqa/hotpot_train_v1.1.json \
+    --output_dir data/hotpotqa \
     --subset_docs 10000 \
     --subset_queries 5000
 
 # Step 2: 生成向量嵌入 (耗时较长，约 20 分钟)
 python scripts/hotpotqa/generate_embeddings_simple.py \
-    --corpus data/corpus_subset.jsonl \
-    --queries data/queries_subset.jsonl \
-    --output_dir data \
+    --corpus data/hotpotqa/corpus_subset.jsonl \
+    --queries data/hotpotqa/queries_subset.jsonl \
+    --output_dir data/hotpotqa \
     --model_name models/Xorbits/bge-large-en-v1.5
 
 # Step 3: 计算精确 KNN Ground Truth (约 2 秒)
 python scripts/hotpotqa/compute_knn_gt.py \
-    --corpus_emb data/corpus_embeddings.npy \
-    --query_emb data/query_embeddings.npy \
-    --output_dir data \
+    --corpus_emb data/hotpotqa/corpus_embeddings.npy \
+    --query_emb data/hotpotqa/query_embeddings.npy \
+    --output_dir data/hotpotqa \
     --top_k 100
 
 # Step 4: 导出为 C++ fvecs/ivecs 格式 (约 1 秒)
 python scripts/hotpotqa/export_vecs.py \
-    --corpus_emb data/corpus_embeddings.npy \
-    --query_emb data/query_embeddings.npy \
-    --gt data/knn_gt_indices.npy \
-    --output_dir data
+    --corpus_emb data/hotpotqa/corpus_embeddings.npy \
+    --query_emb data/hotpotqa/query_embeddings.npy \
+    --gt data/hotpotqa/knn_gt_indices.npy \
+    --output_dir data/hotpotqa
 
 # Step 5: 创建结果目录
 RUN_DIR=results/$(date +%Y%m%d_%H%M%S)
@@ -136,9 +148,9 @@ mkdir -p $RUN_DIR/raw
 
 # Step 6: 运行 C++ Benchmark (约 30 秒)
 ./benchmark/build/bench_hotpotqa \
-    --base_path data/corpus_vectors.fvecs \
-    --query_path data/query_vectors.fvecs \
-    --gt_path data/ground_truth.ivecs \
+    --base_path data/hotpotqa/corpus_vectors.fvecs \
+    --query_path data/hotpotqa/query_vectors.fvecs \
+    --gt_path data/hotpotqa/ground_truth.ivecs \
     --output $RUN_DIR/raw/benchmark.json \
     --metric ip \
     --M 16 \
@@ -160,7 +172,7 @@ python scripts/common/plot_results.py \
 # Step 9: 收集系统元数据
 python scripts/common/collect_meta.py \
     --output $RUN_DIR/run_meta.json \
-    --data_dir data \
+    --data_dir data/hotpotqa \
     --hnswlib_dir .
 
 echo "Results saved to $RUN_DIR"
@@ -191,7 +203,7 @@ bash scripts/hotpotqa/run_all.sh
 
 ### 5. 仅运行 Benchmark（推荐复用数据时使用）
 
-当你已经准备好 `data/` 下的向量与 Ground Truth（`corpus_vectors.fvecs`、`query_vectors.fvecs`、`ground_truth.ivecs`），并且只想快速对比 HNSW 参数组合时：
+当你已经准备好 `data/hotpotqa/` 下的向量与 Ground Truth（`corpus_vectors.fvecs`、`query_vectors.fvecs`、`ground_truth.ivecs`），并且只想快速对比 HNSW 参数组合时：
 
 ```bash
 bash scripts/hotpotqa/run_benchmark.sh
@@ -274,18 +286,18 @@ bash scripts/hotpotqa/run_benchmark.sh
 ```bash
 # 构建并保存索引
 ./benchmark/build/bench_hotpotqa \
-    --base_path data/corpus_vectors.fvecs \
-    --query_path data/query_vectors.fvecs \
-    --gt_path data/ground_truth.ivecs \
+    --base_path data/hotpotqa/corpus_vectors.fvecs \
+    --query_path data/hotpotqa/query_vectors.fvecs \
+    --gt_path data/hotpotqa/ground_truth.ivecs \
     --M 16 --ef_construction 200 \
     --save_index 1 --index_path /tmp/my_index.bin \
     --output results/build_run.json
 
 # 加载索引并运行（跳过构建，索引完全相同）
 ./benchmark/build/bench_hotpotqa \
-    --base_path data/corpus_vectors.fvecs \
-    --query_path data/query_vectors.fvecs \
-    --gt_path data/ground_truth.ivecs \
+    --base_path data/hotpotqa/corpus_vectors.fvecs \
+    --query_path data/hotpotqa/query_vectors.fvecs \
+    --gt_path data/hotpotqa/ground_truth.ivecs \
     --load_index 1 --index_path /tmp/my_index.bin \
     --defer_qps 1 \
     --output results/query_run.json
@@ -394,6 +406,74 @@ results/ablation_YYYYMMDD_HHMMSS/
 在默认交替模式下，K=1 的 16 线程 QPS 测试会驱逐 L3 缓存中的索引数据。随后 K=10 的延迟测量（仅 1000 次 warmup）不足以恢复 M=8+efc=400 这种内存布局分散的图结构的缓存状态，导致约 1-5% 的查询因 LLC cache miss 而延迟飙升。
 
 该问题经 `sudo perf stat` 验证：baseline 比 defer_qps 多出 **22.7% 的 LLC-load-misses**（约 259 万次），集中在 K=10 延迟测量阶段。
+
+---
+
+# LoCoMo Benchmark
+
+使用 LoCoMo (Long Conversation Memory) 数据集评估 hnswlib 在长对话记忆检索场景下的性能。
+
+## 数据集特点
+
+- **来源**: [snap-research/locomo](https://github.com/snap-research/locomo) — 长对话记忆 QA 数据集
+- **文档粒度**: 每个对话轮次 (dialog turn) 为一个 document
+- **查询**: 每个 QA pair 为一个 query
+- **Ground Truth**: 通过 QA 中的 evidence 字段 (dia_id) 映射到 doc_id
+- **向量模型**: BGE-large-en-v1.5 (1024 维)
+- **距离度量**: Inner Product
+
+## 快速开始
+
+### 一键运行
+
+```bash
+bash scripts/locomo/run_all.sh
+```
+
+该脚本会依次执行：
+1. 下载 locomo10.json
+2. 解析为标准格式 (corpus.jsonl, queries.jsonl, ground_truth.jsonl)
+3. 生成向量嵌入 (复用 hotpotqa 的 generate_embeddings.py)
+4. 计算精确 KNN Ground Truth
+5. 导出 fvecs/ivecs 格式
+6. 运行 C++ Benchmark
+7. 汇总结果并生成图表
+
+### 仅运行 Benchmark
+
+```bash
+bash scripts/locomo/run_benchmark.sh
+```
+
+### 分步运行
+
+```bash
+# Step 0: 下载数据
+python scripts/locomo/download_data.py --output_dir data/locomo
+
+# Step 1: 解析数据
+python scripts/locomo/parse_data.py \
+    --input data/locomo/locomo10.json \
+    --output_dir data/locomo
+
+# Step 2+: 同 HotpotQA 流程，将路径改为 data/locomo/
+```
+
+## 目录结构
+
+```
+data/locomo/
+├── locomo10.json               # 原始数据
+├── corpus.jsonl                # 对话轮次语料
+├── queries.jsonl               # QA 查询集合
+├── ground_truth.jsonl          # 证据映射
+├── stats.json                  # 数据统计
+├── corpus_embeddings.npy       # 文档向量
+├── query_embeddings.npy        # 查询向量
+├── corpus_vectors.fvecs        # C++ 格式文档向量
+├── query_vectors.fvecs         # C++ 格式查询向量
+└── ground_truth.ivecs          # 精确 KNN 结果
+```
 
 ---
 

@@ -75,12 +75,28 @@ def read_ivecs(path):
 def load_dataset(dataset, data_dir):
     dd = Path(data_dir)
     if dataset == "hotpotqa":
-        base = np.load(dd / "corpus_embeddings.npy")
-        queries = np.load(dd / "query_embeddings.npy")
-        gtp = dd / "knn_gt_indices.npy"
+        hd = dd / "hotpotqa"
+        base = np.load(hd / "corpus_embeddings.npy")
+        queries = np.load(hd / "query_embeddings.npy")
+        gtp = hd / "knn_gt_indices.npy"
         gt = np.load(gtp) if gtp.exists() else None
-        if gt is None and (dd / "ground_truth.ivecs").exists():
-            buf = open(dd / "ground_truth.ivecs", "rb").read()
+        if gt is None and (hd / "ground_truth.ivecs").exists():
+            buf = open(hd / "ground_truth.ivecs", "rb").read()
+            off, rows = 0, []
+            while off < len(buf):
+                d = struct.unpack_from("i", buf, off)[0]
+                off += 4
+                rows.append(np.frombuffer(buf, np.int32, d, off).copy())
+                off += d * 4
+            gt = np.vstack(rows) if rows else None
+    elif dataset == "locomo":
+        ld = dd / "locomo"
+        base = np.load(ld / "corpus_embeddings.npy")
+        queries = np.load(ld / "query_embeddings.npy")
+        gtp = ld / "knn_gt_indices.npy"
+        gt = np.load(gtp) if gtp.exists() else None
+        if gt is None and (ld / "ground_truth.ivecs").exists():
+            buf = open(ld / "ground_truth.ivecs", "rb").read()
             off, rows = 0, []
             while off < len(buf):
                 d = struct.unpack_from("i", buf, off)[0]
@@ -244,7 +260,7 @@ h1{{color:#1a1a2e;border-bottom:2px solid #4361ee;padding-bottom:10px}}
 
 def main():
     ap = argparse.ArgumentParser(description="数据集整体可视化")
-    ap.add_argument("--dataset", choices=["hotpotqa", "sift1m"], default="hotpotqa")
+    ap.add_argument("--dataset", choices=["hotpotqa", "locomo", "sift1m"], default="hotpotqa")
     ap.add_argument("--data_dir", default="data")
     ap.add_argument("--dim", type=int, choices=[2, 3], default=2, help="投影维度")
     ap.add_argument("--max_base", type=int, default=50000, help="基向量最大采样数")

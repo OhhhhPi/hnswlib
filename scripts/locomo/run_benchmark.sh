@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run only the C++ benchmark part with multiple M configurations
+# Run only the C++ benchmark part with multiple M configurations (LoCoMo)
 
 set -e
 
@@ -7,10 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-DATA_DIR="./data/hotpotqa"
+DATA_DIR="./data/locomo"
 RESULTS_BASE="./results"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULT_DIR="${RESULTS_BASE}/${TIMESTAMP}"
+RESULT_DIR="${RESULTS_BASE}/locomo_${TIMESTAMP}"
 RAW_DIR="${RESULT_DIR}/raw"
 PLOT_DIR="${RESULT_DIR}/plots"
 
@@ -22,11 +22,7 @@ K_VALUES="1,10,100"
 NUM_THREADS=64
 
 # ---------------------------------------------------------------------------
-# NUMA policy — reduces cross-node memory latency on multi-socket systems.
-#   --interleave=all: stripe index memory across all NUMA nodes so that
-#   threads on any node have roughly equal average access latency.
-# OMP_PROC_BIND=spread + OMP_PLACES=cores: evenly distribute OpenMP threads
-#   across all cores/sockets to avoid oversubscribing a single node.
+# NUMA policy
 # ---------------------------------------------------------------------------
 export OMP_PROC_BIND=spread
 export OMP_PLACES=cores
@@ -43,7 +39,7 @@ fi
 mkdir -p "$RAW_DIR" "$PLOT_DIR"
 
 echo "=========================================="
-echo " HNSW Benchmark - Multiple M Configurations"
+echo " LoCoMo HNSW Benchmark - Multiple M Configurations"
 echo "=========================================="
 echo " Run ID: ${TIMESTAMP}"
 echo " Results: ${RESULT_DIR}"
@@ -67,17 +63,17 @@ echo "Running benchmarks..."
 for M in $M_VALUES; do
     for EFC in $EFC_VALUES; do
         OUTPUT_FILE="${RAW_DIR}/results_M${M}_efc${EFC}.json"
-        
+
         if [ -f "$OUTPUT_FILE" ]; then
             echo "  Skipping M=${M}, efc=${EFC} (already exists)"
             continue
         fi
-        
+
         echo ""
         echo "  ======================================"
         echo "  Running: M=${M}, ef_construction=${EFC}"
         echo "  ======================================"
-        
+
         $NUMA_CMD $BENCH_BIN \
             --base_path "$DATA_DIR/corpus_vectors.fvecs" \
             --query_path "$DATA_DIR/query_vectors.fvecs" \
